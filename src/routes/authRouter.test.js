@@ -1,6 +1,10 @@
 const request = require('supertest');
 const app = require('../service');
 
+if (process.env.VSCODE_INSPECTOR_OPTIONS) {
+    jest.setTimeout(60 * 1000 * 5); // 5 minutes
+  }
+
 const testUser = { name: 'pizza diner', email: 'reg@test.com', password: 'a' };
 let testUserAuthToken;
 
@@ -37,3 +41,13 @@ test('register', async () => {
 //   write test so that you can login multiple times with the same user. 
 // for some reason you can't right now
 
+// const { Role, DB } = require('../database/database.js');
+
+// async function createAdminUser() {
+//   let user = { password: 'toomanysecrets', roles: [{ role: Role.Admin }] };
+//   user.name = randomName();
+//   user.email = user.name + '@admin.com';
+
+//   user = await DB.addUser(user);
+//   return { ...user, password: 'toomanysecrets' };
+// }
