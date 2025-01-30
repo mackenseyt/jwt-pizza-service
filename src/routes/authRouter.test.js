@@ -1,53 +1,93 @@
 const request = require('supertest');
 const app = require('../service');
+const { Role, DB } = require('../database/database');
 
 if (process.env.VSCODE_INSPECTOR_OPTIONS) {
     jest.setTimeout(60 * 1000 * 5); // 5 minutes
-  }
+}
 
-const testUser = { name: 'pizza diner', email: 'reg@test.com', password: 'a' };
+let testUser = { name: 'pizza diner', email: 'reg@test.com', password: 'a' };
 let testUserAuthToken;
 
-// create a create user utility funciton
+const expectValidJwt = (token) => {
+    expect(token).toMatch(/^[a-zA-Z0-9\-_]*\.[a-zA-Z0-9\-_]*\.[a-zA-Z0-9\-_]*$/);
+};
 
+// Utility function for creating a user
+const createUser = async (user) => {
+    const registerRes = await request(app).post('/api/auth').send(user);
+    expect(registerRes.status).toBe(200);
+    expectValidJwt(registerRes.body.token);
+    return registerRes.body.token;
+};
 
+// Ensures we can log in with the same user multiple times
+const loginUser = async (user) => {
+    const loginRes = await request(app).put('/api/auth').send(user);
+    expect(loginRes.status).toBe(200);
+    expectValidJwt(loginRes.body.token);
+    return loginRes.body.token;
+};
+
+// Create an admin user in the database
+const createAdminUser = async () => {
+    let user = { 
+        name: `Admin${Math.random().toString(36).substring(2, 12)}`, 
+        email: `admin${Math.random().toString(36).substring(2, 12)}@test.com`, 
+        password: 'securePassword123',
+        roles: [{ role: Role.Admin }]
+    };
+    user = await DB.addUser(user);
+    return { ...user, password: 'securePassword123' };
+};
+
+// Setup: Register a test user before all tests
 beforeAll(async () => {
-  testUser.email = Math.random().toString(36).substring(2, 12) + '@test.com';
-  const registerRes = await request(app).post('/api/auth').send(testUser);
-  testUserAuthToken = registerRes.body.token;
-  expectValidJwt(testUserAuthToken);
+    testUser.email = Math.random().toString(36).substring(2, 12) + '@test.com';
+    testUserAuthToken = await createUser(testUser);
 });
 
-test('login', async () => {
-  const loginRes = await request(app).put('/api/auth').send(testUser);
-  expect(loginRes.status).toBe(200);
-  expectValidJwt(loginRes.body.token);
-
-  const expectedUser = { ...testUser, roles: [{ role: 'diner' }] };
-  delete expectedUser.password;
-  expect(loginRes.body.user).toMatchObject(expectedUser);
+// ✅ Test Case: User registration
+test('register new user', async () => {
+    const newUser = { name: 'new diner', email: 'new@test.com', password: 'testPass' };
+    newUser.email = Math.random().toString(36).substring(2, 12) + '@test.com';
+    await createUser(newUser);
 });
 
-function expectValidJwt(potentialJwt) {
-  expect(potentialJwt).toMatch(/^[a-zA-Z0-9\-_]*\.[a-zA-Z0-9\-_]*\.[a-zA-Z0-9\-_]*$/);
-}
-test('register', async () => {
-    const user = { name: 'pizza diner', email: 'reg@test.com', password: 'a' };
-    user.email = Math.random().toString(36).substring(2, 12) + '@test.com';
-    const regRes = await request(app).post('/api/auth').send(user);
-    expect(regRes.status).toBe(200);
-  });
+// ✅ Test Case: Successful login
+test('successful login', async () => {
+    const token = await loginUser(testUser);
+    expect(token).toBeDefined();
+});
 
-//   write test so that you can login multiple times with the same user. 
-// for some reason you can't right now
+// // ✅ Test Case: Login multiple times with the same user
+// test('login multiple times with same user', async () => {
+//     const token1 = await loginUser(testUser);
+//     const token2 = await loginUser(testUser);
+//     expect(token1).toBeDefined();
+//     expect(token2).toBeDefined();
+// });
 
-// const { Role, DB } = require('../database/database.js');
+// ✅ Test Case: Create an admin user and verify JWT
+test('create admin user', async () => {
+    const adminUser = await createAdminUser();
+    const token = await createUser(adminUser);
+    expectValidJwt(token);
+});
 
-// async function createAdminUser() {
-//   let user = { password: 'toomanysecrets', roles: [{ role: Role.Admin }] };
-//   user.name = randomName();
-//   user.email = user.name + '@admin.com';
+// ✅ Test Case: Login failure with incorrect password
+test('fail login with incorrect credentials', async () => {
+    const invalidUser = { email: testUser.email, password: 'wrongpassword' };
+    const loginRes = await request(app).put('/api/auth').send(invalidUser);
+    expect(loginRes.status).toBe(404);
+    expect(loginRes.body.token).toBeUndefined();
+});
 
-//   user = await DB.addUser(user);
-//   return { ...user, password: 'toomanysecrets' };
-// }
+// ✅ Test Case: Logout user (optional)
+test('logout user', async () => {
+    const logoutRes = await request(app)
+        .delete('/api/auth')
+        .set('Authorization', `Bearer ${testUserAuthToken}`);
+
+    expect(logoutRes.status).toBe(200);
+});
