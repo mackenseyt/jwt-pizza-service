@@ -1,6 +1,6 @@
 const request = require('supertest');
 const app = require('../service'); // Ensure this imports your app with routes
-const { DB, Role } = require('../database/database'); // Correct imports for DB and Role
+// const { DB, Role } = require('../database/database'); // Correct imports for DB and Role
 
 jest.setTimeout(60 * 1000 * 5); // 5 minutes timeout for some of the tests
 

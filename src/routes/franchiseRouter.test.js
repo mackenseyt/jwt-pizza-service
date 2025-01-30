@@ -1,7 +1,7 @@
 const request = require('supertest');
 const express = require('express');
-const { DB, Role } = require('../database/database.js');
-const { authRouter } = require('../routes/authRouter.js');
+const { DB} = require('../database/database.js');
+// const { authRouter } = require('../routes/authRouter.js');
 const franchiseRouter = require('../routes/franchiseRouter.js');
 
 // Mock DB and authentication
