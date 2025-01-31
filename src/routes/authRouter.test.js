@@ -47,35 +47,24 @@ beforeAll(async () => {
     testUserAuthToken = await createUser(testUser);
 });
 
-// ✅ Test Case: User registration
 test('register new user', async () => {
     const newUser = { name: 'new diner', email: 'new@test.com', password: 'testPass' };
     newUser.email = Math.random().toString(36).substring(2, 12) + '@test.com';
     await createUser(newUser);
 });
 
-// ✅ Test Case: Successful login
 test('successful login', async () => {
     const token = await loginUser(testUser);
     expect(token).toBeDefined();
 });
 
-// // ✅ Test Case: Login multiple times with the same user
-// test('login multiple times with same user', async () => {
-//     const token1 = await loginUser(testUser);
-//     const token2 = await loginUser(testUser);
-//     expect(token1).toBeDefined();
-//     expect(token2).toBeDefined();
-// });
 
-// ✅ Test Case: Create an admin user and verify JWT
 test('create admin user', async () => {
     const adminUser = await createAdminUser();
     const token = await createUser(adminUser);
     expectValidJwt(token);
 });
 
-// ✅ Test Case: Login failure with incorrect password
 test('fail login with incorrect credentials', async () => {
     const invalidUser = { email: testUser.email, password: 'wrongpassword' };
     const loginRes = await request(app).put('/api/auth').send(invalidUser);
@@ -83,7 +72,6 @@ test('fail login with incorrect credentials', async () => {
     expect(loginRes.body.token).toBeUndefined();
 });
 
-// ✅ Test Case: Logout user (optional)
 test('logout user', async () => {
     const logoutRes = await request(app)
         .delete('/api/auth')
