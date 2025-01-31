@@ -2,7 +2,6 @@
 const request = require('supertest');
 const express = require('express');
 const { DB } = require('../database/database.js');
-const { authRouter } = require('./authRouter.js');
 const orderRouter = require('./orderRouter.js');
 
 // Create an express app to use with supertest
