@@ -41,7 +41,6 @@ const createAdminUser = async () => {
     return { ...user, password: 'securePassword123' };
 };
 
-// Setup: Register a test user before all tests
 beforeAll(async () => {
     testUser.email = Math.random().toString(36).substring(2, 12) + '@test.com';
     testUserAuthToken = await createUser(testUser);
