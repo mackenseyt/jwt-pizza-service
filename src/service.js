@@ -46,11 +46,13 @@ app.use('*', (req, res) => {
     message: 'unknown endpoint',
   });
 });
-
-// Default error handler for all exceptions and errors.
+// Error handling middleware
 app.use((err, req, res, next) => {
   res.status(err.statusCode ?? 500).json({ message: err.message, stack: err.stack });
   next();
 });
+
+//Send the Metrics
+metrics.sendMetricsPeriodically(5000);
 
 module.exports = app;
