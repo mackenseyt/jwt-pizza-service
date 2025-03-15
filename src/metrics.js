@@ -16,32 +16,6 @@ function getMemoryUsagePercentage() {
   return memoryUsage.toFixed(2);
 }
 
-class MetricBuilder {
-  constructor() {
-    this.metrics = [];
-  }
-
-  addMetric(name, value, type, unit) {
-    const metric = {
-      name: name,
-      unit: unit,
-      [type]: {
-        dataPoints: [
-          {
-            asInt: value,
-            timeUnixNano: Date.now() * 1000000,
-          },
-        ],
-      },
-    };
-    this.metrics.push(metric);
-  }
-
-  toString(separator = '\n') {
-    return JSON.stringify({ resourceMetrics: [{ scopeMetrics: [{ metrics: this.metrics }] }] });
-  }
-}
-
 function requestTracker(req, res, next) {
   const start = Date.now();
   res.on('finish', () => {
