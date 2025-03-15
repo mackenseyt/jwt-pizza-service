@@ -65,7 +65,7 @@ function sendMetricToGrafana(metricName, metricValue, type, unit) {
                 [type]: {
                   dataPoints: [
                     {
-                      asInt: metricValue,
+                      asInt: Math.round(metricValue), // Ensure it's an integer
                       timeUnixNano: Date.now() * 1000000,
                     },
                   ],
@@ -83,10 +83,9 @@ function sendMetricToGrafana(metricName, metricValue, type, unit) {
     metric.resourceMetrics[0].scopeMetrics[0].metrics[0][type].isMonotonic = true;
   }
 
-  const body = JSON.stringify(metric);
   fetch(config.metrics.url, {
     method: 'POST',
-    body: body,
+    body: JSON.stringify(metric),
     headers: { 
       Authorization: `Bearer ${config.metrics.apiKey}`, 
       'Content-Type': 'application/json' 
@@ -95,7 +94,7 @@ function sendMetricToGrafana(metricName, metricValue, type, unit) {
     .then((response) => {
       if (!response.ok) {
         response.text().then((text) => {
-          console.error(`Failed to push metrics to Grafana: ${text}\n${body}`);
+          console.error(`Failed to push metrics to Grafana: ${text}`);
         });
       } else {
         console.log(`Pushed ${metricName}: ${metricValue}`);
@@ -109,10 +108,8 @@ function sendMetricToGrafana(metricName, metricValue, type, unit) {
 function sendMetricsPeriodically(period) {
   setInterval(() => {
     try {
-      const buf = new MetricBuilder();
-      // Add calls to your metric functions here
-      const metrics = buf.toString('\n');
-      sendMetricToGrafana(metrics);
+      sendMetricToGrafana('cpu_usage', Math.round(getCpuUsagePercentage()), 'gauge', '%');
+      sendMetricToGrafana('memory_usage', Math.round(getMemoryUsagePercentage()), 'gauge', '%');
     } catch (error) {
       console.log('Error sending metrics', error);
     }
@@ -121,8 +118,8 @@ function sendMetricsPeriodically(period) {
 
 // **Automatically Send CPU & Memory Metrics Every 5 Seconds**
 setInterval(() => {
-  sendMetricToGrafana('cpu_usage', getCpuUsagePercentage(), 'gauge', '%');
-  sendMetricToGrafana('memory_usage', getMemoryUsagePercentage(), 'gauge', '%');
+  sendMetricToGrafana('cpu_usage', Math.round(getCpuUsagePercentage()), 'gauge', '%');
+  sendMetricToGrafana('memory_usage', Math.round(getMemoryUsagePercentage()), 'gauge', '%');
 }, 5000);
 
 module.exports = {
