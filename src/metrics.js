@@ -1,8 +1,10 @@
-const os = require('os');
-const fetch = require('node-fetch');
 const config = require('./config');
+console.log('Loaded config:', config);
+const os = require('os');
 
-// Example Code (Unmodified)
+let requests = 0;
+let latency = 0;
+
 function getCpuUsagePercentage() {
   const cpuUsage = os.loadavg()[0] / os.cpus().length;
   return cpuUsage.toFixed(2) * 100;
@@ -16,14 +18,18 @@ function getMemoryUsagePercentage() {
   return memoryUsage.toFixed(2);
 }
 
-function requestTracker(req, res, next) {
-  const start = Date.now();
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    console.log(`Request to ${req.method} ${req.originalUrl} took ${duration}ms`);
-    // Add logic to track request metrics
-  });
-  next();
+function sendMetricsPeriodically(period) {
+  setInterval(() => {
+    try {
+      sendMetricToGrafana('cpu', getCpuUsagePercentage(), 'gauge', '%');
+      sendMetricToGrafana('memory', getMemoryUsagePercentage(), 'gauge', '%');
+      sendMetricToGrafana('requests', requests, 'sum', '1');
+      sendMetricToGrafana('latency', latency, 'sum', 'ms');
+      sendActiveUsersMetric();
+    } catch (error) {
+      console.log('Error sending metrics', error);
+    }
+  }, period);
 }
 
 function sendMetricToGrafana(metricName, metricValue, type, unit) {
@@ -39,7 +45,7 @@ function sendMetricToGrafana(metricName, metricValue, type, unit) {
                 [type]: {
                   dataPoints: [
                     {
-                      asInt: Math.round(metricValue), // Ensure it's an integer
+                      asDouble: metricValue,
                       timeUnixNano: Date.now() * 1000000,
                     },
                   ],
@@ -57,21 +63,19 @@ function sendMetricToGrafana(metricName, metricValue, type, unit) {
     metric.resourceMetrics[0].scopeMetrics[0].metrics[0][type].isMonotonic = true;
   }
 
-  fetch(config.metrics.url, {
+  const body = JSON.stringify(metric);
+  fetch(`${config.metrics.url}`, {
     method: 'POST',
-    body: JSON.stringify(metric),
-    headers: { 
-      Authorization: `Bearer ${config.metrics.apiKey}`, 
-      'Content-Type': 'application/json' 
-    },
+    body: body,
+    headers: { Authorization: `Bearer ${config.metrics.apiKey}`, 'Content-Type': 'application/json' },
   })
     .then((response) => {
       if (!response.ok) {
         response.text().then((text) => {
-          console.error(`Failed to push metrics to Grafana: ${text}`);
+          console.error(`Failed to push metrics data to Grafana: ${text}\n${body}`);
         });
       } else {
-        console.log(`Pushed ${metricName}: ${metricValue}`);
+        console.log(`Pushed ${metricName}`);
       }
     })
     .catch((error) => {
@@ -79,24 +83,96 @@ function sendMetricToGrafana(metricName, metricValue, type, unit) {
     });
 }
 
-function sendMetricsPeriodically(period) {
-  setInterval(() => {
-    try {
-      sendMetricToGrafana('cpu_usage', Math.round(getCpuUsagePercentage()), 'gauge', '%');
-      sendMetricToGrafana('memory_usage', Math.round(getMemoryUsagePercentage()), 'gauge', '%');
-    } catch (error) {
-      console.log('Error sending metrics', error);
-    }
-  }, period);
+
+let activeUsers = new Set();
+
+function trackUserLogin(userId) {
+  activeUsers.add(userId);
+  sendActiveUsersMetric();
 }
 
-// **Automatically Send CPU & Memory Metrics Every 5 Seconds**
-setInterval(() => {
-  sendMetricToGrafana('cpu_usage', Math.round(getCpuUsagePercentage()), 'gauge', '%');
-  sendMetricToGrafana('memory_usage', Math.round(getMemoryUsagePercentage()), 'gauge', '%');
-}, 5000);
+function trackUserLogout(userId) {
+  activeUsers.delete(userId);
+  sendActiveUsersMetric();
+}
 
-module.exports = {
-  sendMetricsPeriodically,
-  requestTracker,
+function sendActiveUsersMetric() {
+  sendMetricToGrafana('active_users', activeUsers.size, 'gauge', 'count');
+}
+
+let authMetrics = {
+    successfulLogins: 0,
+    failedLogins: 0,
+  };
+  
+  function trackSuccessfulLogin() {
+    authMetrics.successfulLogins++;
+  }
+  
+  function trackFailedLogin() {
+    authMetrics.failedLogins++;
+  }
+  
+  function sendAuthMetrics() {
+    sendMetricToGrafana('auth_successful_attempts', authMetrics.successfulLogins, 'sum', '1');
+    sendMetricToGrafana('auth_failed_attempts', authMetrics.failedLogins, 'sum', '1');
+  
+    authMetrics.successfulLogins = 0;
+    authMetrics.failedLogins = 0;
+  }
+  
+  setInterval(sendAuthMetrics, 10 * 1000);
+  
+  module.exports = { requestTracker, sendMetricsPeriodically, trackUserLogin, trackUserLogout, trackSuccessfulLogin, trackFailedLogin };
+  
+
+
+
+let requestMetrics = {
+  totalRequests: 0,
+  methods: { GET: 0, POST: 0, PUT: 0, DELETE: 0 },
 };
+
+function requestTracker(req, res, next) {
+    requestMetrics.totalRequests++;
+    requestMetrics.methods[req.method] = (requestMetrics.methods[req.method] || 0) + 1;
+
+    const start = process.hrtime();
+    res.on('finish', () => {
+      const [seconds, nanoseconds] = process.hrtime(start);
+      const durationMs = (seconds * 1000) + (nanoseconds / 1e6);
+        
+      sendMetricToGrafana(`request_time_${req.method}`, durationMs.toFixed(2), 'sum', 'ms');
+      sendMetricToGrafana(`requests_${req.method}`, requestMetrics.methods[req.method], 'sum', '1');
+        sendMetricToGrafana('requests_total', requestMetrics.totalRequests, 'sum', '1');
+    });
+  
+    next();
+  }
+
+  let pizzasSold = 0;
+let creationFailures = 0;
+let revenue = 0;
+
+function trackPizzaSale(amount) {
+  pizzasSold++;
+  revenue += amount;
+}
+
+function trackCreationFailure() {
+  creationFailures++;
+}
+
+function sendPizzaMetrics() {
+  sendMetricToGrafana('pizzas_sold_per_minute', pizzasSold, 'sum', '1');
+  sendMetricToGrafana('pizza_creation_failures_per_minute', creationFailures, 'sum', '1');
+  sendMetricToGrafana('revenue_per_minute', revenue.toFixed(4), 'sum', 'currency');
+
+  pizzasSold = 0;
+  creationFailures = 0;
+  revenue = 0;
+}
+
+setInterval(sendPizzaMetrics, 60 * 1000);
+
+  module.exports = { sendMetricToGrafana, requestTracker, sendMetricsPeriodically, trackUserLogin, trackUserLogout, trackSuccessfulLogin, trackFailedLogin, trackPizzaSale, trackCreationFailure };

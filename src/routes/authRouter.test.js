@@ -67,7 +67,7 @@ test('create admin user', async () => {
 test('fail login with incorrect credentials', async () => {
     const invalidUser = { email: testUser.email, password: 'wrongpassword' };
     const loginRes = await request(app).put('/api/auth').send(invalidUser);
-    expect(loginRes.status).toBe(404);
+    expect(loginRes.status).toBe(401);
     expect(loginRes.body.token).toBeUndefined();
 });
 
