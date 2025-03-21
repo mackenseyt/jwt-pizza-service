@@ -1,6 +1,6 @@
 const config = require('./config');
-console.log('Loaded config:', config);
 const os = require('os');
+const fetch = require('node-fetch');
 
 let requests = 0;
 let latency = 0;
@@ -46,7 +46,7 @@ function sendMetricToGrafana(metricName, metricValue, type, unit) {
                   dataPoints: [
                     {
                       asDouble: metricValue,
-                      timeUnixNano: Date.now() * 1000000,
+                      timeUnixNano: Date.now() * 1000000 + Math.floor(Math.random() * 1000), // Ensure unique timestamp
                     },
                   ],
                 },
@@ -83,7 +83,6 @@ function sendMetricToGrafana(metricName, metricValue, type, unit) {
     });
 }
 
-
 let activeUsers = new Set();
 
 function trackUserLogin(userId) {
@@ -101,32 +100,27 @@ function sendActiveUsersMetric() {
 }
 
 let authMetrics = {
-    successfulLogins: 0,
-    failedLogins: 0,
-  };
-  
-  function trackSuccessfulLogin() {
-    authMetrics.successfulLogins++;
-  }
-  
-  function trackFailedLogin() {
-    authMetrics.failedLogins++;
-  }
-  
-  function sendAuthMetrics() {
-    sendMetricToGrafana('auth_successful_attempts', authMetrics.successfulLogins, 'sum', '1');
-    sendMetricToGrafana('auth_failed_attempts', authMetrics.failedLogins, 'sum', '1');
-  
-    authMetrics.successfulLogins = 0;
-    authMetrics.failedLogins = 0;
-  }
-  
-  setInterval(sendAuthMetrics, 10 * 1000);
-  
-  module.exports = { requestTracker, sendMetricsPeriodically, trackUserLogin, trackUserLogout, trackSuccessfulLogin, trackFailedLogin };
-  
+  successfulLogins: 0,
+  failedLogins: 0,
+};
 
+function trackSuccessfulLogin() {
+  authMetrics.successfulLogins++;
+}
 
+function trackFailedLogin() {
+  authMetrics.failedLogins++;
+}
+
+function sendAuthMetrics() {
+  sendMetricToGrafana('auth_successful_attempts', authMetrics.successfulLogins, 'sum', '1');
+  sendMetricToGrafana('auth_failed_attempts', authMetrics.failedLogins, 'sum', '1');
+
+  authMetrics.successfulLogins = 0;
+  authMetrics.failedLogins = 0;
+}
+
+setInterval(sendAuthMetrics, 10 * 1000);
 
 let requestMetrics = {
   totalRequests: 0,
@@ -134,23 +128,23 @@ let requestMetrics = {
 };
 
 function requestTracker(req, res, next) {
-    requestMetrics.totalRequests++;
-    requestMetrics.methods[req.method] = (requestMetrics.methods[req.method] || 0) + 1;
+  requestMetrics.totalRequests++;
+  requestMetrics.methods[req.method] = (requestMetrics.methods[req.method] || 0) + 1;
 
-    const start = process.hrtime();
-    res.on('finish', () => {
-      const [seconds, nanoseconds] = process.hrtime(start);
-      const durationMs = (seconds * 1000) + (nanoseconds / 1e6);
-        
-      sendMetricToGrafana(`request_time_${req.method}`, durationMs.toFixed(2), 'sum', 'ms');
-      sendMetricToGrafana(`requests_${req.method}`, requestMetrics.methods[req.method], 'sum', '1');
-        sendMetricToGrafana('requests_total', requestMetrics.totalRequests, 'sum', '1');
-    });
-  
-    next();
-  }
+  const start = process.hrtime();
+  res.on('finish', () => {
+    const [seconds, nanoseconds] = process.hrtime(start);
+    const durationMs = (seconds * 1000) + (nanoseconds / 1e6);
 
-  let pizzasSold = 0;
+    sendMetricToGrafana(`request_time_${req.method}`, durationMs.toFixed(2), 'sum', 'ms');
+    sendMetricToGrafana(`requests_${req.method}`, requestMetrics.methods[req.method], 'sum', '1');
+    sendMetricToGrafana('requests_total', requestMetrics.totalRequests, 'sum', '1');
+  });
+
+  next();
+}
+
+let pizzasSold = 0;
 let creationFailures = 0;
 let revenue = 0;
 
@@ -175,4 +169,4 @@ function sendPizzaMetrics() {
 
 setInterval(sendPizzaMetrics, 60 * 1000);
 
-  module.exports = { sendMetricToGrafana, requestTracker, sendMetricsPeriodically, trackUserLogin, trackUserLogout, trackSuccessfulLogin, trackFailedLogin, trackPizzaSale, trackCreationFailure };
+module.exports = { sendMetricToGrafana, requestTracker, sendMetricsPeriodically, trackUserLogin, trackUserLogout, trackSuccessfulLogin, trackFailedLogin, trackPizzaSale, trackCreationFailure };

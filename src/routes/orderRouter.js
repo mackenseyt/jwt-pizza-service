@@ -4,6 +4,7 @@ const { Role, DB } = require('../database/database.js');
 const { authRouter } = require('./authRouter.js');
 const { asyncHandler, StatusCodeError } = require('../endpointHelper.js');
 const { trackPizzaSale, trackCreationFailure, sendMetricToGrafana } = require('../metrics.js');
+const logger = require('../logger.js');
 
 const orderRouter = express.Router();
 
@@ -81,6 +82,11 @@ orderRouter.post(
     const orderReq = req.body;
     const start = process.hrtime(); // Start tracking time
     const order = await DB.addDinerOrder(req.user, orderReq);
+    const factoryUrl = `${config.factory.url}/api/order`;
+    const factoryMethod = 'POST';
+    const factoryBody = JSON.stringify({ diner: { id: req.user.id, name: req.user.name, email: req.user.email }, order });
+
+    logger.logFactoryRequest(factoryUrl, factoryMethod, factoryBody); // Log the factory service request
     const r = await fetch(`${config.factory.url}/api/order`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', authorization: `Bearer ${config.factory.apiKey}` },
